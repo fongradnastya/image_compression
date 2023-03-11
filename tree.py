@@ -1,5 +1,9 @@
+import threading
 from typing import Optional, Union
 from PIL import Image
+
+MAX_DEPTH = 8  # Максимальная глубина узла
+MAX_VALUE = 13  # Порог значения
 
 
 class Point:
@@ -12,8 +16,16 @@ class Point:
         :param y_pos: Координата y
         :return: None
         """
-        self.x_pos = x_pos
-        self.y_pos = y_pos
+        self._x_pos = x_pos
+        self._y_pos = y_pos
+
+    @property
+    def x_pos(self):
+        return self._x_pos
+
+    @property
+    def y_pos(self):
+        return self._y_pos
 
     def __eq__(self, another: "Point") -> bool:
         """
@@ -21,14 +33,14 @@ class Point:
         :param another: Точка для сравнения
         :return: Результат сравнения
         """
-        return self.x_pos == another.y_pos and self.y_pos == another.y_pos
+        return self._x_pos == another._y_pos and self._y_pos == another._y_pos
 
     def __repr__(self) -> str:
         """
         Строковое представление точки.
         :return: Cтроковое представление точки
         """
-        return f"Point: ({self.x_pos}, {self.y_pos})"
+        return f"Point: ({self._x_pos}, {self._y_pos})"
 
 
 def average_color(hist: list[int]):
@@ -197,23 +209,18 @@ class TreeNode:
             if point.x_pos < self._node_center_point.x_pos and point.y_pos < \
                     self._node_center_point.y_pos:
                 return self.children[0].insert_point(point)
-
             if point.x_pos >= self._node_center_point.x_pos and \
                     point.y_pos < self._node_center_point.y_pos:
                 return self.children[1].insert_point(point)
-
             if point.x_pos < self._node_center_point.x_pos and \
                     point.y_pos >= self._node_center_point.y_pos:
                 self.children[2].insert_point(point)
-
             if point.x_pos >= self._node_center_point.x_pos and \
                     point.y_pos >= self._node_center_point.y_pos:
                 self.children[3].insert_point(point)
-
         self.node_points.append(point)
 
-    def find_node(self, point, search_list: list = None) ->\
-            list["TreeNode", list]:
+    def find_node_contain_point(self, point, search_list: list = None):
         """
         Возвращает узел, содержащий точку и путь до узла.
         :param point: искомая точка
@@ -240,7 +247,7 @@ class TreeNode:
                     point.y_pos >= self._node_center_point.y_pos:
                 if self.children[3] is not None:
                     return self.children[3].find_node(point, search_list)
-        return self, search_list
+        return self
 
     def remove_point(self, delete_point: Point) -> None:
         """
@@ -248,17 +255,108 @@ class TreeNode:
         :param delete_point: Удаляемая точка.
         :return: None
         """
-        current_node, _ = self.find_node(delete_point)
+        current_node = self.find_node_contain_point(delete_point)
         if current_node is not None:
             for point in current_node.node_points:
                 if point == delete_point:
                     current_node.node_points.remove(point)
 
-    def find_node_contain_point(self, search_point: Point) -> "TreeNode":
+
+class Tree:
+    """Класс квадродерева."""
+
+    def __init__(self, image: Image) -> None:
         """
-        Возвращает узел, который содержит точку.
-        :param search_point: Искомая точка
-        :return: Необходимый узел.
+        Конструктор класса
+        :param image: исходное изображение.
+        :return: None
         """
-        current_node, _ = self.find_node(search_point)
-        return current_node
+        self._width, self._height = image.size
+        self._root = TreeNode(image, image.getbbox(), 0)
+        # отслеживает максимальную глубину, достигнутую рекурсией
+        self._max_deep = 0
+        self._build_tree(image, self._root)
+
+    @property
+    def width(self) -> int:
+        """
+        Возвращает ширину исходного изображения
+        :return: ширина исходного изображения
+        """
+        return self._width
+
+    @property
+    def height(self) -> int:
+        """
+        Возвращает высоту исходного изображения
+        :return: высота изображения
+        """
+        return self._height
+
+    @property
+    def max_depth(self) -> int:
+        """
+        Возвращает максимальную глубину, достигнутую рекурсией.
+        :return: Значение максимальной глубины.
+        """
+        return self._max_deep
+
+    @property
+    def root(self) -> TreeNode:
+        """
+        Возвращает корневой узел
+        :return: высота изображения
+        """
+        return self._root
+
+    def _build_tree(self, image: Image, node: TreeNode) -> None:
+        """
+        Рекурсивно добавляет узлы, пока не будет достигнута макс. глубина
+        :param image: исходное изображение
+        :param node: узел
+        :return: None
+        """
+        if (node.depth >= MAX_DEPTH) or (node.error <= MAX_VALUE):
+            if node.depth > self._max_deep:
+                self._max_deep = node.depth
+            node.is_leaf = True
+            return None
+        node.split(image)
+        threads = []
+        for child in node.children:
+            thread = threading.Thread(target=self._build_tree,
+                                      args=(image, child))
+            thread.start()
+            threads.append(thread)
+        for process in threads:
+            process.join()
+        return None
+
+    def get_leaf_nodes(self, deep: int) -> list:
+        """
+        Получаем листья дерева.
+        :param deep: Значение глубины рекурсии.
+        :return: Список листьев
+        """
+        if deep > self._max_deep:
+            raise ValueError('Дана глубина больше, чем высота деревьев')
+        leaf_nodes = []
+        # рекурсивный поиск по квадродереву
+        self.get_leaf_nodes_recursion(self._root, deep, leaf_nodes)
+        return leaf_nodes
+
+    def get_leaf_nodes_recursion(self, node: TreeNode, depth: int,
+                                 leaf_nodes: list) -> None:
+        """
+        Рекурсивно получает листовые узлы в зависимости от того,
+        является ли узел листом или достигнута заданная глубина.
+        :param node: Узел
+        :param depth: значение глубины
+        :param leaf_nodes: Список листьев
+        :return:
+        """
+        if node.is_leaf is True or node.depth == depth:
+            leaf_nodes.append(node)
+        elif node.children is not None:
+            for child in node.children:
+                self.get_leaf_nodes_recursion(child, depth, leaf_nodes)
