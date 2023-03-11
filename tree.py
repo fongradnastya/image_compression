@@ -195,7 +195,7 @@ class TreeNode:
                self._node_center_point.x_pos, bottom)
         bottom_left = TreeNode(image, box, self._deep + 1)
         box = (self._node_center_point.x_pos, self._node_center_point.y_pos,
-               right, bottom),
+               right, bottom)
         bottom_right = TreeNode(image, box, self._deep + 1)
         self._children = [top_left, top_right, bottom_left, bottom_right]
 

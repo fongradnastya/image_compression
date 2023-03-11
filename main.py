@@ -6,7 +6,7 @@ from graphic import GifGenerator, MAX_DEPTH
 
 def check_arguments(args):
     if os.path.exists(args.img):
-        if args.img.endswith('.png') or args.img.endwith('.jpg'):
+        if args.img.endswith('.png') or args.img.endswith('.jpg'):
             if 0 < args.level <= MAX_DEPTH:
                 return True
             else:
@@ -34,8 +34,6 @@ def parse():
     if check_arguments(args):
         gif = GifGenerator()
         gif.compression_start(args.img, args.level, args.borders, args.gif)
-    else:
-        print("Переданы неверные аргументы.")
 
 
 if __name__ == "__main__":

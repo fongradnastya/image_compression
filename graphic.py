@@ -59,8 +59,8 @@ class GifGenerator:
         self.frames[0].save(self.path, save_all=True,
                             append_images=self.frames[1:],
                             optimize=True,
-                            duration=800,
-                            loop=1)
+                            duration=200,
+                            loop=0)
         print("Gif creation successfully completed")
         self.frames[0].close()
         self.frames.clear()
@@ -105,7 +105,10 @@ class GifGenerator:
         file_name = file[:-4]
         file_extension = file[len(file) - 3::]
         result_image = self.generate_image(quadtree, level, borders)
-        result_image.save(f"{file_name}_quadtree.{file_extension}")
+        name = os.path.basename(file)[:-4]
+        path = os.path.dirname(__file__) + \
+               f"\\img_gen\\{name}_quadtree.{file_extension}"
+        result_image.save(path)
         print("The image was compressed")
         if gif:
             for value in range(MAX_DEPTH + 1):
