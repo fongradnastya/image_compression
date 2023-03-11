@@ -1,5 +1,5 @@
 import threading
-from typing import Optional, Union
+from typing import Optional
 from PIL import Image
 
 MAX_DEPTH = 8  # Максимальная глубина узла
