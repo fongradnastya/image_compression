@@ -1,0 +1,264 @@
+from typing import Optional, Union
+from PIL import Image
+
+
+class Point:
+    """Класс точки."""
+
+    def __init__(self, x_pos: int, y_pos: int) -> None:
+        """
+        Конструктор класса точки.
+        :param x_pos: Координата x
+        :param y_pos: Координата y
+        :return: None
+        """
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+
+    def __eq__(self, another: "Point") -> bool:
+        """
+        Сравнение двух точек.
+        :param another: Точка для сравнения
+        :return: Результат сравнения
+        """
+        return self.x_pos == another.y_pos and self.y_pos == another.y_pos
+
+    def __repr__(self) -> str:
+        """
+        Строковое представление точки.
+        :return: Cтроковое представление точки
+        """
+        return f"Point: ({self.x_pos}, {self.y_pos})"
+
+
+def average_color(hist: list[int]):
+    """
+    Возвращает взвешенное среднее значение цвета и
+    ошибку из гистограммы пикселей.
+    :param hist: список количества пикселей для каждого диапазона.
+    :return: взвешенное среднее значение цвета и ошибка
+    """
+    c_sum = sum(hist)
+    if c_sum > 0:
+        value = sum(i * x for i, x in enumerate(hist))
+        value /= c_sum
+        error = sum(x * (value - i) ** 2 for i, x in enumerate(hist))
+        error = (error / c_sum) ** 0.5
+        return value, error
+    return 0, 0
+
+
+def color_from_histogram(hist: list[int]):
+    """
+    Возвращает средний цвет RGB из заданной гистограммы
+    количества цветов пикселей.
+    :param hist: список количества пикселей для каждого диапазона.
+    :return: Cредний цвет и ошибка.
+    """
+    red, red_error = average_color(hist[:256])
+    green, green_error = average_color(hist[256:512])
+    blue, blue_error = average_color(hist[512:768])
+    error = red_error * 0.2989 + green_error * 0.5870 + blue_error * 0.1140
+    return (int(red), int(green), int(blue)), error
+
+
+class TreeNode:
+    """
+    Класс, отвечающий за узел квадродерева,
+    который содержит секцию изображения и информацию о ней.
+    """
+    def __init__(self, image: Image, border_box: tuple[int], deep: int) -> \
+            None:
+        """
+        Конструктор класса.
+        :param image: изображение
+        :param border_box: координатная область
+        :param deep: глубина
+        :return: None
+        """
+        self._border_box = border_box  # регион копирования
+        self._deep = deep
+        self._children = None  # top left,top right,bottom left,bottom right
+        self._is_leaf = False
+        self.node_points = []
+
+        left_right = self._border_box[0] + (self._border_box[2] -
+                                            self._border_box[0]) / 2
+        top_bottom = self._border_box[1] + (self._border_box[3] -
+                                            self._border_box[1]) / 2
+
+        self._node_center_point = Point(left_right, top_bottom)
+        # Обрезка части изображения по координатам
+        image = image.crop(border_box)
+        # 256 типа красного, 256 типов зеленого и 256 синего.
+        hist = image.histogram()
+        self._average_color, self._error = color_from_histogram(hist)
+
+    @property
+    def depth(self) -> int:
+        """
+        Возвращает значение глубины.
+        :return: Значение глубины.
+        """
+        return self._deep
+
+    @property
+    def node_center_point(self) -> Point:
+        """
+        Возвращает координаты центральной точки узла.
+        :return: Координаты центральной точки.
+        """
+        return self._node_center_point
+
+    @property
+    def error(self) -> float:
+        """
+        Возвращает значения ошибки.
+        :return: Значение ошибки.
+        """
+        return self._error
+
+    @property
+    def average_color(self) -> tuple[int, int, int]:
+        """
+        Возвращает значения цвета
+        :return: Значение цвета.
+        """
+        return self._average_color
+
+    @property
+    def children(self) -> Optional[list]:
+        """
+        Возвращение дочерних узлов.
+        :return: Список с дочерними узлами.
+        """
+        return self._children
+
+    @property
+    def border_box(self) -> tuple[int]:
+        """
+        Возвращает координаты граничных точек.
+        :return: Координаты точек.
+        """
+        return self._border_box
+
+    @property
+    def is_leaf(self) -> bool:
+        """
+        Является ли узел листом или нет.
+        :return: Логическое значение
+        """
+        return self._is_leaf
+
+    @is_leaf.setter
+    def is_leaf(self, value: bool) -> None:
+        """
+        Квадрант становится листом.
+        :param value: Булевое значение
+        :return: None
+        """
+        self._is_leaf = value
+
+    def __repr__(self) -> str:
+        """
+        Строковое представление узла
+        :return: строковое представление узла.
+        """
+        return f"Узел дерева: {self._border_box}"
+
+    def split(self, image: Image) -> None:
+        """
+        Разбивает данную секцию изображения на четыре равных блока.
+        :param image: Изображение
+        :return: None
+        """
+        left, top, right, bottom = self._border_box
+        box = (left, top, self._node_center_point.x_pos,
+            self._node_center_point.y_pos)
+        top_left = TreeNode(image, box, self._deep + 1)
+        box = (self._node_center_point.x_pos, top, right,
+               self._node_center_point.y_pos)
+        top_right = TreeNode(image, box, self._deep + 1)
+        box = (left, self._node_center_point.y_pos,
+               self._node_center_point.x_pos, bottom)
+        bottom_left = TreeNode(image, box, self._deep + 1)
+        box = (self._node_center_point.x_pos, self._node_center_point.y_pos,
+               right, bottom),
+        bottom_right = TreeNode(image, box, self._deep + 1)
+        self._children = [top_left, top_right, bottom_left, bottom_right]
+
+    def insert_point(self, point: Point) -> "function":
+        """
+        Вставка точки в подходящий узел
+        :param point: Точка, которая должна быть вставлена
+        :return: None или рекурсивный вызов функции.
+        """
+        if self.children is not None:
+            if point.x_pos < self._node_center_point.x_pos and point.y_pos < \
+                    self._node_center_point.y_pos:
+                return self.children[0].insert_point(point)
+
+            if point.x_pos >= self._node_center_point.x_pos and \
+                    point.y_pos < self._node_center_point.y_pos:
+                return self.children[1].insert_point(point)
+
+            if point.x_pos < self._node_center_point.x_pos and \
+                    point.y_pos >= self._node_center_point.y_pos:
+                self.children[2].insert_point(point)
+
+            if point.x_pos >= self._node_center_point.x_pos and \
+                    point.y_pos >= self._node_center_point.y_pos:
+                self.children[3].insert_point(point)
+
+        self.node_points.append(point)
+
+    def find_node(self, point, search_list: list = None) ->\
+            list["TreeNode", list]:
+        """
+        Возвращает узел, содержащий точку и путь до узла.
+        :param point: искомая точка
+        :param search_list: список узлов
+        :return: узел и список узлов
+        """
+        if not search_list:
+            search_list = []
+        search_list.append(self)
+        if self.children is not None:
+            if point.x_pos < self._node_center_point.x_pos and \
+                    point.y_pos < self._node_center_point.y_pos:
+                if self.children[0] is not None:
+                    return self.children[0].find_node(point, search_list)
+            elif point.x_pos >= self._node_center_point.x_pos and \
+                    point.y_pos < self._node_center_point.y_pos:
+                if self.children[1] is not None:
+                    return self.children[1].find_node(point, search_list)
+            elif point.x_pos < self._node_center_point.x_pos and \
+                    point.y_pos >= self._node_center_point.y_pos:
+                if self.children[2] is not None:
+                    return self.children[2].find_node(point, search_list)
+            elif point.x_pos >= self._node_center_point.x_pos and \
+                    point.y_pos >= self._node_center_point.y_pos:
+                if self.children[3] is not None:
+                    return self.children[3].find_node(point, search_list)
+        return self, search_list
+
+    def remove_point(self, delete_point: Point) -> None:
+        """
+        Удаление точки.
+        :param delete_point: Удаляемая точка.
+        :return: None
+        """
+        current_node, _ = self.find_node(delete_point)
+        if current_node is not None:
+            for point in current_node.node_points:
+                if point == delete_point:
+                    current_node.node_points.remove(point)
+
+    def find_node_contain_point(self, search_point: Point) -> "TreeNode":
+        """
+        Возвращает узел, который содержит точку.
+        :param search_point: Искомая точка
+        :return: Необходимый узел.
+        """
+        current_node, _ = self.find_node(search_point)
+        return current_node
