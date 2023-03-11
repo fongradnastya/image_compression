@@ -93,7 +93,7 @@ class TreeNode:
         self._children = None  # top left,top right,bottom left,bottom right
         self._is_leaf = False
         self.node_points = []
-
+        print(self._border_box)
         left_right = self._border_box[0] + (self._border_box[2] -
                                             self._border_box[0]) / 2
         top_bottom = self._border_box[1] + (self._border_box[3] -
